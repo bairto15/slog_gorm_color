@@ -16,26 +16,20 @@ import (
 
 type gormLogger struct {
 	logger.Config
-
-	logger *slog.Logger
+	attr []slog.Attr
 }
 
-func NewGormLogger(showParams bool) logger.Interface {
-	log := slog.Default()
+func NewGormLogger(showParams bool, attr []slog.Attr) logger.Interface {
+	l := &gormLogger{
+		Config: logger.Config{LogLevel: logger.Info},
+		attr: attr,
+	}
 
 	if showParams {
-		return &gormLogger{
-			Config: logger.Config{LogLevel: logger.Info},
-			logger: log,
-		}
+		return l
 	}
 
-	return &withOutParams{
-		gormLogger: gormLogger{
-			Config: logger.Config{LogLevel: logger.Info},
-			logger: log,
-		},
-	}
+	return &withOutParams{gormLogger: l}
 }
 
 // Имплементация интерфейса gorm логера
@@ -46,15 +40,15 @@ func (g *gormLogger) LogMode(logLevel logger.LogLevel) logger.Interface {
 }
 
 func (g *gormLogger) Info(ctx context.Context, msg string, data ...any) {
-	g.logger.InfoContext(ctx, msg, data...)
+	slog.InfoContext(ctx, msg, data...)
 }
 
 func (g *gormLogger) Warn(ctx context.Context, msg string, data ...any) {
-	g.logger.WarnContext(ctx, msg, data...)
+	slog.WarnContext(ctx, msg, data...)
 }
 
 func (g *gormLogger) Error(ctx context.Context, msg string, data ...any) {
-	g.logger.ErrorContext(ctx, msg, data...)
+	slog.ErrorContext(ctx, msg, data...)
 }
 
 func (g *gormLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
@@ -88,11 +82,11 @@ func (g *gormLogger) Trace(ctx context.Context, begin time.Time, fc func() (stri
 		return
 	}
 
-	g.Info(ctx, "")
+	slog.LogAttrs(ctx, slog.LevelInfo, "", g.attr...)
 }
 
 type withOutParams struct {
-	gormLogger
+	*gormLogger
 }
 
 func (g *withOutParams) ParamsFilter(ctx context.Context, sql string, params ...any) (string, []any) {
