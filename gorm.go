@@ -21,7 +21,7 @@ type gormLogger struct {
 }
 
 func NewGormLogger(showParams bool, args ...any) logger.Interface {
-	log := slog.With(args)
+	log := slog.Default().With(args)
 
 	if showParams {
 		return &gormLogger{
