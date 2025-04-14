@@ -180,8 +180,6 @@ func (h *handlerTextColor) WithGroup(name string) slog.Handler {
 }
 
 func (h *handlerTextColor) AddValueCtx(ctx context.Context, buf *buffer) error {
-	fmt.Println(h.addCxtAttr)
-	fmt.Println(ctx)
 	for _, v := range h.addCxtAttr {
 		if c := ctx.Value(v); c != nil {
 			h.appendCtxValue(buf, v, fmt.Sprintf("%v ", c))
