@@ -11,13 +11,11 @@ import (
 	"strings"
 )
 
-type KeyCtx string
-
 const (
-	Source   = KeyCtx("source")
-	Duration = KeyCtx("duration")
-	Rows     = KeyCtx("rows")
-	Sql      = KeyCtx("sql")
+	Source   = "source"
+	Duration = "duration"
+	Rows     = "rows"
+	Sql      = "sql"
 )
 
 type HandlerMiddleware struct {
