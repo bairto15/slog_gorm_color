@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"path"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -104,16 +105,16 @@ func (h *handlerTextColor) Handle(ctx context.Context, r slog.Record) error {
 	// write path and line call
 	fs := runtime.CallersFrames([]uintptr{r.PC})
 	f, _ := fs.Next()
-	if h.source && f.File != "" {
-		src := &slog.Source{
-			Function: f.Function,
-			File:     f.File,
-			Line:     f.Line,
-		}
-
+	if h.source && f.File != "" {		
 		if c, ok := ctx.Value(Source).(slog.Source); ok {
 			h.appendSource(buf, &c)
 		} else {
+			src := &slog.Source{
+				Function: f.Function,
+				File:     f.File,
+				Line:     f.Line,
+			}
+
 			h.appendSource(buf, src)
 		}
 	}
@@ -211,7 +212,7 @@ func (h *handlerTextColor) appendSource(buf *buffer, src *slog.Source) {
 	dir, file := filepath.Split(src.File)
 
 	buf.WriteString(Faint)
-	buf.WriteString(filepath.Join(filepath.Base(dir), file))
+	buf.WriteString(path.Join(filepath.Base(dir), file))
 
 	if src.Line != 0 {
 		buf.WriteByte(':')
@@ -221,8 +222,8 @@ func (h *handlerTextColor) appendSource(buf *buffer, src *slog.Source) {
 
 	buf.WriteString(" ")
 
-	buf.WriteString(Magenta)
-	buf.WriteString(filepath.Base(src.Function))
+	buf.WriteString(Blue)
+	buf.WriteString(getFuncNameSlog(src.Function))
 	buf.WriteString(Reset)
 
 	buf.WriteByte(' ')
