@@ -20,7 +20,9 @@ type gormLogger struct {
 	logger *slog.Logger
 }
 
-func NewGormLogger(log *slog.Logger, showParams bool) logger.Interface {
+func NewGormLogger(showParams bool) logger.Interface {
+	log := slog.Default().With("group", "db_query")
+
 	if showParams {
 		return &gormLogger{
 			Config: logger.Config{LogLevel: logger.Info},
