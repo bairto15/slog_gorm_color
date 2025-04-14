@@ -37,7 +37,7 @@ const (
 )
 
 type Options struct {
-	AddCxtAttr    []KeyCtx
+	AddCxtAttr    []string
 	W             io.Writer
 	Source        bool
 	SlowThreshold time.Duration
@@ -49,7 +49,7 @@ type handlerTextColor struct {
 	level       slog.Leveler
 	attrsPrefix string
 	groupPrefix string
-	addCxtAttr  []KeyCtx
+	addCxtAttr  []string
 	groups      []string
 
 	slowThreshold time.Duration

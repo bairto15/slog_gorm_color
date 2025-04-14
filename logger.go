@@ -22,7 +22,7 @@ const (
 
 type HandlerMiddleware struct {
 	source     bool
-	addCxtAttr []KeyCtx
+	addCxtAttr []string
 	next       slog.Handler
 }
 
