@@ -20,19 +20,10 @@ type gormLogger struct {
 	logger *slog.Logger
 }
 
-func NewGormLogger(defaultLogger *slog.Logger, showParams bool) logger.Interface {
-	if showParams {
-		return &gormLogger{
-			Config: logger.Config{LogLevel: logger.Info},
-			logger: defaultLogger,
-		}
-	}
-
-	return &withOutParams{
-		gormLogger: gormLogger{
-			Config: logger.Config{LogLevel: logger.Info},
-			logger: defaultLogger,
-		},
+func NewGormLogger(defaultLogger *slog.Logger, showParams bool) *gormLogger {
+	return &gormLogger{
+		Config: logger.Config{LogLevel: logger.Info},
+		logger: defaultLogger,
 	}
 }
 
