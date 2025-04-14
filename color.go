@@ -189,7 +189,7 @@ func (h *handlerTextColor) AddValueCtx(ctx context.Context, buf *buffer) error {
 	}
 
 	return nil
-}
+} 
 
 func (h *handlerTextColor) appendTime(buf *buffer, t time.Time) {
 	buf.WriteString(Faint)
