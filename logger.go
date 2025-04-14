@@ -84,6 +84,10 @@ func InitLogger(opts Options) {
 	slog.SetDefault(logger)
 }
 
+func GetLogger() *slog.Logger {
+	return slog.Default()
+}
+
 func InitDevLogger(opts Options) {
 	handler := NewDevHandler(opts)
 
