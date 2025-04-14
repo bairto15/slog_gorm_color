@@ -18,7 +18,6 @@ import (
 	"unicode/utf8"
 )
 
-
 const (
 	// ANSI-коды для цветов
 	Reset        = "\u001b[0m"
@@ -33,7 +32,7 @@ const (
 	BrightGreen  = "\u001b[92m"
 	BrightYellow = "\u001b[93m"
 
-	ansiEsc = '\u001b'	
+	ansiEsc = '\u001b'
 )
 
 type Options struct {
@@ -105,7 +104,7 @@ func (h *handlerTextColor) Handle(ctx context.Context, r slog.Record) error {
 	// write path and line call
 	fs := runtime.CallersFrames([]uintptr{r.PC})
 	f, _ := fs.Next()
-	if h.source && f.File != "" {		
+	if h.source && f.File != "" {
 		if c, ok := ctx.Value(Source).(slog.Source); ok {
 			h.appendSource(buf, &c)
 		} else {
@@ -134,6 +133,7 @@ func (h *handlerTextColor) Handle(ctx context.Context, r slog.Record) error {
 	// write handlerTextColor attributes
 	if len(h.attrsPrefix) > 0 {
 		buf.WriteString(h.attrsPrefix)
+		buf.WriteByte(' ')
 	}
 
 	// write sql
@@ -186,8 +186,10 @@ func (h *handlerTextColor) AddValueCtx(ctx context.Context, buf *buffer) error {
 		}
 	}
 
+	buf.WriteByte(' ')
+
 	return nil
-} 
+}
 
 func (h *handlerTextColor) appendTime(buf *buffer, t time.Time) {
 	buf.WriteString(Faint)
