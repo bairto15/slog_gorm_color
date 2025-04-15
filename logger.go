@@ -38,6 +38,10 @@ func (h *HandlerMiddleware) Handle(ctx context.Context, rec slog.Record) error {
 			rec.Add(v, c)
 		}
 	}
+	
+	if c := ctx.Value(Sql); c != nil {
+		rec.Add(Sql, c)
+	}
 
 	if h.source {
 		if c := ctx.Value(Source); c == nil {
