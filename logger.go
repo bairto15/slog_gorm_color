@@ -25,7 +25,7 @@ type HandlerMiddleware struct {
 }
 
 func NewHandlerMiddleware(next slog.Handler, opt Options) *HandlerMiddleware {
-	return &HandlerMiddleware{next: next, source: opt.Source, addCxtAttr: opt.AddCxtAttr }
+	return &HandlerMiddleware{next: next, source: opt.Source, addCxtAttr: opt.AddCxtAttr}
 }
 
 func (h *HandlerMiddleware) Enabled(ctx context.Context, rec slog.Level) bool {
@@ -35,9 +35,7 @@ func (h *HandlerMiddleware) Enabled(ctx context.Context, rec slog.Level) bool {
 func (h *HandlerMiddleware) Handle(ctx context.Context, rec slog.Record) error {
 	for _, v := range h.addCxtAttr {
 		if c := ctx.Value(v); c != nil {
-			if c := ctx.Value(c); c != nil {
-				rec.Add(string(v), c)
-			}
+			rec.Add(v, c)
 		}
 	}
 
