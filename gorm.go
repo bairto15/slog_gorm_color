@@ -6,12 +6,10 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
 	"gorm.io/gorm/logger"
-	"gorm.io/gorm/utils"
 )
 
 type gormLogger struct {
@@ -66,18 +64,11 @@ func (g *gormLogger) Trace(ctx context.Context, begin time.Time, fc func() (stri
 	duration := time.Since(begin)
 	ctx = context.WithValue(ctx, Duration, duration)
 
-	pathLine := utils.FileWithLineNum()
-	dir, file := filepath.Split(pathLine)
-
-	file, line := getFileLine(file)
-
-	funcName := getGormFuncName()
-
-	pathFile := path.Join(filepath.Base(dir), file)
+	funcName, file, line := getGormFuncName()
 
 	source := slog.Source{
 		Function: funcName,
-		File:     pathFile,
+		File:     file,
 		Line:     line,
 	}
 
@@ -99,7 +90,7 @@ func (g *withOutParams) ParamsFilter(ctx context.Context, sql string, params ...
 	return sql, nil
 }
 
-func getGormFuncName() string {
+func getGormFuncName() (funcName string, file string, line int) {
 	pcs := [13]uintptr{}
 
 	length := runtime.Callers(3, pcs[:])
@@ -109,25 +100,15 @@ func getGormFuncName() string {
 		frame, _ := frames.Next()
 
 		if (!strings.Contains(frame.Function, "gorm.io/gorm") || strings.HasSuffix(frame.File, "_test.go")) && !strings.HasSuffix(frame.File, ".gen.go") {
-			return strings.Replace(path.Ext(frame.Function), ".", "", 1)
+			funcName = strings.Replace(path.Ext(frame.Function), ".", "", 1)
+
+			dir, fileName := filepath.Split(frame.File)
+			file = path.Join(filepath.Base(dir), fileName)
+			line = frame.Line
+
+			return
 		}
 	}
 
-	return ""
-}
-
-func getFileLine(fileLine string) (file string, line int) {
-	arr := strings.Split(fileLine, ":")
-	if len(arr) != 2 {
-		return
-	}
-
-	file = arr[0]
-	line, err := strconv.Atoi(arr[1])
-	if err != nil {
-		slog.Error(err.Error())
-		return
-	}
-
-	return
+	return "", "", 0
 }
