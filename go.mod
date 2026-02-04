@@ -1,5 +1,5 @@
 module github.com/bairto15/slog_gorm_color
 
-go 1.21.12
+go 1.24.0
 
-require gorm.io/gorm v1.25.12
+require gorm.io/gorm v1.31.1

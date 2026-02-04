@@ -61,7 +61,7 @@ func TestGormLoggerSourceInfo(t *testing.T) {
 	slog.SetDefault(testLogger)
 
 	// Создаем gorm логгер
-	gormLog := NewGormLogger(true)
+	gormLog := NewGormLogger(true, nil)
 
 	// Вызываем функцию, которая использует gorm логгер
 	testDatabaseQuery(gormLog)
@@ -98,7 +98,7 @@ func TestGormLoggerWithError(t *testing.T) {
 	testLogger := slog.New(handler)
 	slog.SetDefault(testLogger)
 
-	gormLog := NewGormLogger(true)
+	gormLog := NewGormLogger(true, nil)
 
 	ctx := context.Background()
 	begin := time.Now()
@@ -129,7 +129,7 @@ func TestNestedCalls(t *testing.T) {
 	testLogger := slog.New(handler)
 	slog.SetDefault(testLogger)
 
-	gormLog := NewGormLogger(true)
+	gormLog := NewGormLogger(true, nil)
 
 	// Вызываем через вспомогательную функцию
 	helperFunction(gormLog)
@@ -155,7 +155,7 @@ func TestContextValues(t *testing.T) {
 	testLogger := slog.New(handler)
 	slog.SetDefault(testLogger)
 
-	gormLog := NewGormLogger(true)
+	gormLog := NewGormLogger(true, nil)
 
 	ctx := context.Background()
 	begin := time.Now().Add(-100 * time.Millisecond) // Симулируем задержку
