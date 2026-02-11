@@ -199,7 +199,9 @@ func (h *handlerTextColor) appendTime(buf *buffer, t time.Time) {
 
 func (h *handlerTextColor) appendLevel(buf *buffer, level slog.Level) {
 	colorLevel := Red
-	if level.Level() == slog.LevelInfo {
+	if level.Level() == slog.LevelDebug {
+		colorLevel = Blue
+	} else if level.Level() == slog.LevelInfo {
 		colorLevel = BrightGreen
 	} else if level.Level() == slog.LevelWarn {
 		colorLevel = BrightYellow
@@ -273,6 +275,17 @@ func (h *handlerTextColor) appendSql(ctx context.Context, level slog.Level, buf 
 	if c := ctx.Value(Rows); c != nil {
 		buf.WriteString(Yellow)
 		buf.WriteString(fmt.Sprintf("rows:%v ", c))
+		buf.WriteString(Reset)
+	}
+
+	if mode := ctx.Value(Resolver); mode != nil {
+		modeStr := fmt.Sprintf("%v", mode)
+		if modeStr == "source" {
+			buf.WriteString(Red)
+		} else {
+			buf.WriteString(Blue)
+		}
+		buf.WriteString(fmt.Sprintf("[%s] ", modeStr))
 		buf.WriteString(Reset)
 	}
 

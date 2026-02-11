@@ -1,7 +1,9 @@
 package logger
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -87,10 +89,10 @@ func TestGormLoggerSourceInfo(t *testing.T) {
 	}
 
 	// Выводим информацию для визуального контроля
-	t.Logf("Captured source info:")
-	t.Logf("  File: %s", handler.lastSource.File)
-	t.Logf("  Function: %s", handler.lastSource.Function)
-	t.Logf("  Line: %d", handler.lastSource.Line)
+	fmt.Printf("Captured source info:\n")
+	fmt.Printf("  File: %s\n", handler.lastSource.File)
+	fmt.Printf("  Function: %s\n", handler.lastSource.Function)
+	fmt.Printf("  Line: %d\n", handler.lastSource.Line)
 }
 
 func TestGormLoggerWithError(t *testing.T) {
@@ -113,10 +115,10 @@ func TestGormLoggerWithError(t *testing.T) {
 		t.Fatal("Source information was not captured for error case")
 	}
 
-	t.Logf("Error case source info:")
-	t.Logf("  File: %s", handler.lastSource.File)
-	t.Logf("  Function: %s", handler.lastSource.Function)
-	t.Logf("  Line: %d", handler.lastSource.Line)
+	fmt.Printf("Error case source info:\n")
+	fmt.Printf("  File: %s\n", handler.lastSource.File)
+	fmt.Printf("  Function: %s\n", handler.lastSource.Function)
+	fmt.Printf("  Line: %d\n", handler.lastSource.Line)
 }
 
 // Тест для проверки вложенных вызовов
@@ -143,10 +145,10 @@ func TestNestedCalls(t *testing.T) {
 		t.Errorf("Expected function name 'testDatabaseQuery' in nested call, got: %s", handler.lastSource.Function)
 	}
 
-	t.Logf("Nested call source info:")
-	t.Logf("  File: %s", handler.lastSource.File)
-	t.Logf("  Function: %s", handler.lastSource.Function)
-	t.Logf("  Line: %d", handler.lastSource.Line)
+	fmt.Printf("Nested call source info:\n")
+	fmt.Printf("  File: %s\n", handler.lastSource.File)
+	fmt.Printf("  Function: %s\n", handler.lastSource.Function)
+	fmt.Printf("  Line: %d\n", handler.lastSource.Line)
 }
 
 // Тест для проверки корректности context values
@@ -189,5 +191,142 @@ func TestContextValues(t *testing.T) {
 		} else if d < 100*time.Millisecond {
 			t.Errorf("Duration should be at least 100ms, got: %v", d)
 		}
+	}
+
+	fmt.Printf("Context values test:\n")
+	fmt.Printf("  SQL: %s\n", expectedSQL)
+	fmt.Printf("  Rows: %d\n", expectedRows)
+	fmt.Printf("  Duration: >= 100ms\n")
+}
+
+// Тест для проверки вывода dbresolver режима [source]
+func TestDBResolverSourceMode(t *testing.T) {
+	buf := &bytes.Buffer{}
+	handler := NewDevHandler(Options{W: buf, Source: true})
+	testLogger := slog.New(handler)
+	slog.SetDefault(testLogger)
+
+	gormLog := NewGormLogger(true, nil)
+
+	ctx := context.WithValue(context.Background(), DBResolverMode, "source")
+	begin := time.Now()
+	fc := func() (string, int64) {
+		return "INSERT INTO users (name) VALUES ('John')", 1
+	}
+
+	gormLog.Trace(ctx, begin, fc, nil)
+
+	output := buf.String()
+	fmt.Printf("=== DBResolver Source Mode Test ===\n")
+	fmt.Printf("%s", output)
+
+	if !strings.Contains(output, "[source]") {
+		t.Errorf("Expected output to contain '[source]', got: %s", output)
+	}
+}
+
+// Тест для проверки вывода dbresolver режима [replica]
+func TestDBResolverReplicaMode(t *testing.T) {
+	buf := &bytes.Buffer{}
+	handler := NewDevHandler(Options{W: buf, Source: true})
+	testLogger := slog.New(handler)
+	slog.SetDefault(testLogger)
+
+	gormLog := NewGormLogger(true, nil)
+
+	ctx := context.WithValue(context.Background(), DBResolverMode, "replica")
+	begin := time.Now()
+	fc := func() (string, int64) {
+		return "SELECT * FROM users WHERE id = ?", 10
+	}
+
+	gormLog.Trace(ctx, begin, fc, nil)
+
+	output := buf.String()
+	fmt.Printf("=== DBResolver Replica Mode Test ===\n")
+	fmt.Printf("%s", output)
+
+	if !strings.Contains(output, "[replica]") {
+		t.Errorf("Expected output to contain '[replica]', got: %s", output)
+	}
+}
+
+// Тест для проверки цвета DEBUG уровня
+func TestDebugLevelColor(t *testing.T) {
+	buf := &bytes.Buffer{}
+	handler := NewDevHandler(Options{W: buf, Source: true})
+	testLogger := slog.New(handler)
+	slog.SetDefault(testLogger)
+
+	// Логируем на уровне DEBUG
+	slog.DebugContext(context.Background(), "Debug test message", slog.String("key", "value"))
+
+	output := buf.String()
+	fmt.Printf("=== DEBUG Level Color Test ===\n")
+	fmt.Printf("%s", output)
+	fmt.Printf("(DEBUG должен быть синим/голубым цветом)\n")
+
+	if !strings.Contains(output, "DEBUG") {
+		t.Errorf("Expected output to contain 'DEBUG', got: %s", output)
+	}
+}
+
+// Тест для проверки правильного определения пути вызова через обертки
+func TestLoggerWrapperSource(t *testing.T) {
+	buf := &bytes.Buffer{}
+	handler := NewDevHandler(Options{W: buf, Source: true})
+	testLogger := slog.New(handler)
+	slog.SetDefault(testLogger)
+
+	// Вызываем через обертку
+	Info("Test info message")
+
+	output := buf.String()
+	fmt.Printf("=== Logger Wrapper Source Test ===\n")
+	fmt.Printf("%s", output)
+	fmt.Printf("(Путь должен указывать на эту функцию, а не на библиотеку logger)\n")
+
+	// Проверяем что путь указывает на этот тест, а не на logger
+	if strings.Contains(output, "logger.go") {
+		t.Errorf("Source should not point to logger.go, got: %s", output)
+	}
+	if !strings.Contains(output, "gorm_test.go") {
+		t.Errorf("Source should point to gorm_test.go, got: %s", output)
+	}
+
+	// Очищаем буфер для следующего теста
+	buf.Reset()
+
+	// Тестируем Debug
+	Debug("Test debug message")
+	output = buf.String()
+	fmt.Printf("\nDebug output:\n%s", output)
+
+	if !strings.Contains(output, "gorm_test.go") {
+		t.Errorf("Debug source should point to gorm_test.go, got: %s", output)
+	}
+
+	// Очищаем буфер
+	buf.Reset()
+
+	// Тестируем Warn
+	Warn("Test warn message")
+	output = buf.String()
+	fmt.Printf("\nWarn output:\n%s", output)
+
+	if !strings.Contains(output, "gorm_test.go") {
+		t.Errorf("Warn source should point to gorm_test.go, got: %s", output)
+	}
+
+	// Очищаем буфер
+	buf.Reset()
+
+	// Тестируем Error
+	Error("Test error message")
+	output = buf.String()
+	fmt.Printf("\nError output:\n%s", output)
+
+	if !strings.Contains(output, "gorm_test.go") {
+		t.Errorf("Error source should point to gorm_test.go, got: %s", output)
 	}
 }

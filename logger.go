@@ -12,10 +12,12 @@ import (
 )
 
 const (
-	Source   = "source"
-	Duration = "duration"
-	Rows     = "rows"
-	Sql      = "sql"
+	Source         = "source"
+	Duration       = "duration"
+	Rows           = "rows"
+	Sql            = "sql"
+	Resolver       = "resolver"
+	DBResolverMode = "dbresolver:resolver_mode_key"
 )
 
 type HandlerMiddleware struct {
@@ -38,7 +40,7 @@ func (h *HandlerMiddleware) Handle(ctx context.Context, rec slog.Record) error {
 			rec.Add(v, c)
 		}
 	}
-	
+
 	if c := ctx.Value(Sql); c != nil {
 		rec.Add(Sql, c)
 	}
@@ -120,4 +122,55 @@ func getFuncNameSlog(pathFunc string) string {
 	}
 
 	return funcName
+}
+
+// getCallerInfo получает информацию о вызывающем коде, пропуская skip фреймов
+func getCallerInfo(skip int) slog.Source {
+	pcs := [1]uintptr{}
+	n := runtime.Callers(skip, pcs[:])
+	if n < 1 {
+		return slog.Source{}
+	}
+
+	frames := runtime.CallersFrames(pcs[:n])
+	frame, _ := frames.Next()
+
+	if frame.File == "" {
+		return slog.Source{}
+	}
+
+	dir, file := filepath.Split(frame.File)
+	return slog.Source{
+		Function: getFuncNameSlog(frame.Function),
+		File:     path.Join(filepath.Base(dir), file),
+		Line:     frame.Line,
+	}
+}
+
+// Info логирует сообщение на уровне Info с правильным определением места вызова
+func Info(msg string, args ...any) {
+	src := getCallerInfo(3)
+	ctx := context.WithValue(context.Background(), Source, src)
+	slog.InfoContext(ctx, msg, args...)
+}
+
+// Debug логирует сообщение на уровне Debug с правильным определением места вызова
+func Debug(msg string, args ...any) {
+	src := getCallerInfo(3)
+	ctx := context.WithValue(context.Background(), Source, src)
+	slog.DebugContext(ctx, msg, args...)
+}
+
+// Warn логирует сообщение на уровне Warn с правильным определением места вызова
+func Warn(msg string, args ...any) {
+	src := getCallerInfo(3)
+	ctx := context.WithValue(context.Background(), Source, src)
+	slog.WarnContext(ctx, msg, args...)
+}
+
+// Error логирует сообщение на уровне Error с правильным определением места вызова
+func Error(msg string, args ...any) {
+	src := getCallerInfo(3)
+	ctx := context.WithValue(context.Background(), Source, src)
+	slog.ErrorContext(ctx, msg, args...)
 }

@@ -20,7 +20,7 @@ type gormLogger struct {
 func NewGormLogger(showParams bool, attr []slog.Attr) logger.Interface {
 	l := &gormLogger{
 		Config: logger.Config{LogLevel: logger.Info},
-		attr: attr,
+		attr:   attr,
 	}
 
 	if showParams {
@@ -58,6 +58,11 @@ func (g *gormLogger) Trace(ctx context.Context, begin time.Time, fc func() (stri
 	duration := time.Since(begin)
 	ctx = context.WithValue(ctx, Duration, duration)
 
+	// Извлекаем режим dbresolver (source/replica) из контекста
+	if mode := ctx.Value(DBResolverMode); mode != nil {
+		ctx = context.WithValue(ctx, Resolver, mode)
+	}
+
 	funcName, file, line := getGormFuncName()
 
 	source := slog.Source{
@@ -85,24 +90,53 @@ func (g *withOutParams) ParamsFilter(ctx context.Context, sql string, params ...
 }
 
 func getGormFuncName() (funcName string, file string, line int) {
-	pcs := [13]uintptr{}
+	pcs := [20]uintptr{}
 
+	// skip=3 пропускает: runtime.Callers -> getGormFuncName -> Trace
 	length := runtime.Callers(3, pcs[:])
 	frames := runtime.CallersFrames(pcs[:length])
 
 	for i := 0; i < length; i++ {
 		frame, _ := frames.Next()
 
-		if (!strings.Contains(frame.Function, "gorm.io/gorm") || strings.HasSuffix(frame.File, "_test.go")) && !strings.HasSuffix(frame.File, ".gen.go") {
-			funcName = strings.Replace(path.Ext(frame.Function), ".", "", 1)
+		isGorm := strings.Contains(frame.Function, "gorm.io/gorm")
+		isGen := strings.HasSuffix(frame.File, ".gen.go")
+		isRuntime := strings.HasPrefix(frame.Function, "runtime.")
+		isTesting := strings.HasPrefix(frame.Function, "testing.")
 
-			dir, fileName := filepath.Split(frame.File)
-			file = path.Join(filepath.Base(dir), fileName)
-			line = frame.Line
-
-			return
+		if isGorm || isGen || isRuntime || isTesting {
+			continue
 		}
+
+		// Извлекаем имя функции корректно
+		funcName = extractFuncName(frame.Function)
+
+		dir, fileName := filepath.Split(frame.File)
+		file = path.Join(filepath.Base(dir), fileName)
+		line = frame.Line
+
+		return
 	}
 
 	return "", "", 0
+}
+
+// extractFuncName корректно извлекает имя функции из полного пути
+func extractFuncName(fullName string) string {
+	// Убираем пакет, оставляем только тип и метод
+	parts := strings.Split(fullName, "/")
+	if len(parts) == 0 {
+		return fullName
+	}
+
+	// Берём последнюю часть (package.Func или package.(*Type).Method)
+	lastPart := parts[len(parts)-1]
+
+	// Убираем имя пакета
+	dotIdx := strings.Index(lastPart, ".")
+	if dotIdx == -1 || dotIdx == len(lastPart)-1 {
+		return lastPart
+	}
+
+	return lastPart[dotIdx+1:]
 }
