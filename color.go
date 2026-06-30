@@ -74,12 +74,15 @@ func NewDevHandler(opt Options) slog.Handler {
 
 func (h *handlerTextColor) clone() *handlerTextColor {
 	return &handlerTextColor{
-		attrsPrefix: h.attrsPrefix,
-		groupPrefix: h.groupPrefix,
-		groups:      h.groups,
-		w:           h.w,
-		level:       h.level,
-		timeFormat:  h.timeFormat,
+		attrsPrefix:   h.attrsPrefix,
+		groupPrefix:   h.groupPrefix,
+		groups:        h.groups,
+		w:             h.w,
+		level:         h.level,
+		timeFormat:    h.timeFormat,
+		source:        h.source,
+		slowThreshold: h.slowThreshold,
+		addCxtAttr:    h.addCxtAttr,
 	}
 }
 
