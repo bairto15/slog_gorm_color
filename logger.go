@@ -46,7 +46,9 @@ func (h *HandlerMiddleware) Handle(ctx context.Context, rec slog.Record) error {
 	}
 
 	if h.source {
-		if c := ctx.Value(Source); c == nil {
+		if c := ctx.Value(Source); c != nil {
+			rec.Add(string(Source), c)
+		} else {
 			fs := runtime.CallersFrames([]uintptr{rec.PC})
 			f, _ := fs.Next()
 			if f.File != "" {
