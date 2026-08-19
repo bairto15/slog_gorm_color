@@ -24,6 +24,9 @@ var (
 	rootDir    string
 	customRoot string
 	once       sync.Once
+
+	lastLogKey string
+	lastLogMu  sync.Mutex
 )
 
 // SetRootDir задаёт корневую директорию для вычисления относительных путей.
@@ -223,4 +226,76 @@ func Error(msg string, args ...any) {
 	src := getCallerInfo(3)
 	ctx := context.WithValue(context.Background(), Source, src)
 	slog.ErrorContext(ctx, msg, args...)
+}
+
+// shouldLog пропускает повторные логи с одной и той же строки подряд.
+// Если между вызовами был лог с другого места — первый снова проходит.
+func shouldLog(skip int) bool {
+	src := getCallerInfo(skip)
+	key := src.File + ":" + strconv.Itoa(src.Line)
+
+	lastLogMu.Lock()
+	defer lastLogMu.Unlock()
+
+	if lastLogKey == key {
+		return false
+	}
+	lastLogKey = key
+	return true
+}
+
+// Context-версии — принимают существующий контекст (с user_id, export_id и т.д.)
+
+func InfoContext(ctx context.Context, msg string, args ...any) {
+	src := getCallerInfo(3)
+	ctx = context.WithValue(ctx, Source, src)
+	slog.InfoContext(ctx, msg, args...)
+}
+
+func DebugContext(ctx context.Context, msg string, args ...any) {
+	src := getCallerInfo(3)
+	ctx = context.WithValue(ctx, Source, src)
+	slog.DebugContext(ctx, msg, args...)
+}
+
+func WarnContext(ctx context.Context, msg string, args ...any) {
+	src := getCallerInfo(3)
+	ctx = context.WithValue(ctx, Source, src)
+	slog.WarnContext(ctx, msg, args...)
+}
+
+func ErrorContext(ctx context.Context, msg string, args ...any) {
+	src := getCallerInfo(3)
+	ctx = context.WithValue(ctx, Source, src)
+	slog.ErrorContext(ctx, msg, args...)
+}
+
+// Context Once-версии — пропускают повторные вызовы с одной строки подряд
+
+func InfoContextOnce(ctx context.Context, msg string, args ...any) {
+	if !shouldLog(4) {
+		return
+	}
+	InfoContext(ctx, msg, args...)
+}
+
+func DebugContextOnce(ctx context.Context, msg string, args ...any) {
+	if !shouldLog(4) {
+		return
+	}
+	DebugContext(ctx, msg, args...)
+}
+
+func WarnContextOnce(ctx context.Context, msg string, args ...any) {
+	if !shouldLog(4) {
+		return
+	}
+	WarnContext(ctx, msg, args...)
+}
+
+func ErrorContextOnce(ctx context.Context, msg string, args ...any) {
+	if !shouldLog(4) {
+		return
+	}
+	ErrorContext(ctx, msg, args...)
 }
