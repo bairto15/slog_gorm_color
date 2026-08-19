@@ -584,6 +584,47 @@ func TestJSONContextAttrs(t *testing.T) {
 	fmt.Println("→ user_id и section в JSON ✓")
 }
 
+func TestJSONGormFields(t *testing.T) {
+	buf := &bytes.Buffer{}
+	opt := &slog.HandlerOptions{Level: slog.LevelDebug}
+	handler := slog.Handler(slog.NewJSONHandler(buf, opt))
+	handler = NewHandlerMiddleware(handler, Options{Source: true})
+	slog.SetDefault(slog.New(handler))
+
+	gormLog := NewGormLogger(true, nil)
+
+	// Используем реальный GORM Trace с задержкой
+	ctx := context.Background()
+	begin := time.Now().Add(-150 * time.Millisecond)
+	fc := func() (string, int64) {
+		return "SELECT * FROM orders WHERE status = 'pending'", 42
+	}
+
+	gormLog.Trace(ctx, begin, fc, nil)
+
+	output := strings.TrimSpace(buf.String())
+	fmt.Printf("\n=== TestJSONGormFields ===\n%s\n", output)
+
+	var m map[string]any
+	if err := json.Unmarshal([]byte(output), &m); err != nil {
+		t.Fatalf("Invalid JSON: %v", err)
+	}
+
+	if m["sql"] != "SELECT * FROM orders WHERE status = 'pending'" {
+		t.Errorf("Expected sql in JSON, got: %v", m["sql"])
+	}
+	if m["rows"] != float64(42) {
+		t.Errorf("Expected rows=42, got: %v", m["rows"])
+	}
+	if m["duration"] == nil {
+		t.Error("Expected duration in JSON output")
+	}
+	if _, ok := m["source"]; !ok {
+		t.Error("Expected source in JSON output")
+	}
+	fmt.Println("→ sql, rows, duration, source в JSON ✓")
+}
+
 // === Тест WithAttrs не теряет source и addCxtAttr ===
 
 func TestHandlerMiddlewareWithAttrsPreservesSource(t *testing.T) {

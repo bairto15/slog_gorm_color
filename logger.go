@@ -96,6 +96,18 @@ func (h *HandlerMiddleware) Handle(ctx context.Context, rec slog.Record) error {
 		rec.Add(Sql, c)
 	}
 
+	if c := ctx.Value(Duration); c != nil {
+		rec.Add(Duration, c)
+	}
+
+	if c := ctx.Value(Rows); c != nil {
+		rec.Add(Rows, c)
+	}
+
+	if c := ctx.Value(Resolver); c != nil {
+		rec.Add(Resolver, c)
+	}
+
 	if h.source {
 		if c := ctx.Value(Source); c != nil {
 			rec.Add(string(Source), c)
