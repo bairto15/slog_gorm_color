@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 const (
@@ -19,31 +20,44 @@ const (
 	DBResolverMode = "dbresolver:resolver_mode_key"
 )
 
-var rootDir string
+var (
+	rootDir    string
+	customRoot string
+	once       sync.Once
+)
 
-func initRootDir(customDir string) {
-	if customDir != "" {
-		rootDir = customDir
-		return
-	}
-	dir, err := os.Getwd()
-	if err != nil {
-		return
-	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			rootDir = dir
+// SetRootDir задаёт корневую директорию для вычисления относительных путей.
+// Если не вызывать — корень будет определён автоматически по go.mod при первом логе.
+func SetRootDir(dir string) {
+	customRoot = dir
+}
+
+func ensureRootDir() {
+	once.Do(func() {
+		if customRoot != "" {
+			rootDir = customRoot
 			return
 		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
+		dir, err := os.Getwd()
+		if err != nil {
+			return
 		}
-		dir = parent
-	}
+		for {
+			if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+				rootDir = dir
+				return
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	})
 }
 
 func relativePath(abs string) string {
+	ensureRootDir()
 	if rootDir == "" {
 		return abs
 	}
@@ -111,7 +125,7 @@ func (h *HandlerMiddleware) WithGroup(name string) slog.Handler {
 }
 
 func InitLogger(opts Options) {
-	initRootDir(opts.RootDir)
+	SetRootDir(opts.RootDir)
 	opt := &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	}
@@ -129,7 +143,7 @@ func GetLogger() *slog.Logger {
 }
 
 func InitDevLogger(opts Options) {
-	initRootDir(opts.RootDir)
+	SetRootDir(opts.RootDir)
 	handler := NewDevHandler(opts)
 
 	logger := slog.New(handler)

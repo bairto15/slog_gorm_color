@@ -112,7 +112,7 @@ func (h *handlerTextColor) Handle(ctx context.Context, r slog.Record) error {
 		} else {
 			src := &slog.Source{
 				Function: f.Function,
-				File:     f.File,
+				File:     relativePath(f.File),
 				Line:     f.Line,
 			}
 
