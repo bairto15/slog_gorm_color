@@ -3,6 +3,7 @@ package logger
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -510,5 +511,194 @@ func TestOnceContextConcurrent(t *testing.T) {
 
 	if lines == 0 {
 		t.Error("Expected at least 1 log")
+	}
+}
+
+// === Тесты для JSON формата ===
+
+func TestJSONOnceDedup(t *testing.T) {
+	buf := &bytes.Buffer{}
+	opt := &slog.HandlerOptions{Level: slog.LevelDebug}
+	handler := slog.Handler(slog.NewJSONHandler(buf, opt))
+	handler = NewHandlerMiddleware(handler, Options{Source: true})
+	slog.SetDefault(slog.New(handler))
+	resetOnceLog()
+
+	fmt.Println("\n=== TestJSONOnceDedup ===")
+	fmt.Println("3 вызова ErrorOnce в JSON формате:")
+
+	for i := 0; i < 3; i++ {
+		ErrorOnce("json dedup error", "i", i)
+	}
+
+	output := buf.String()
+	fmt.Printf("%s\n", output)
+
+	lines := strings.Count(output, "\n")
+	if lines != 1 {
+		t.Errorf("Expected exactly 1 JSON line, got %d", lines)
+	}
+
+	// Проверяем что это валидный JSON с source
+	var m map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(output)), &m); err != nil {
+		t.Fatalf("Invalid JSON: %v", err)
+	}
+	if _, ok := m["source"]; !ok {
+		t.Error("JSON output should contain 'source' field")
+	}
+	if m["msg"] != "json dedup error" {
+		t.Errorf("Expected msg 'json dedup error', got: %v", m["msg"])
+	}
+	fmt.Println("→ 1 JSON строка с source ✓")
+}
+
+func TestJSONContextAttrs(t *testing.T) {
+	buf := &bytes.Buffer{}
+	opt := &slog.HandlerOptions{Level: slog.LevelDebug}
+	handler := slog.Handler(slog.NewJSONHandler(buf, opt))
+	handler = NewHandlerMiddleware(handler, Options{Source: true, AddCxtAttr: []string{"user_id", "section"}})
+	slog.SetDefault(slog.New(handler))
+
+	ctx := context.WithValue(context.Background(), "user_id", "abc-123")
+	ctx = context.WithValue(ctx, "section", "billing")
+
+	InfoContext(ctx, "json context test")
+
+	output := strings.TrimSpace(buf.String())
+	fmt.Printf("\n=== TestJSONContextAttrs ===\n%s\n", output)
+
+	var m map[string]any
+	if err := json.Unmarshal([]byte(output), &m); err != nil {
+		t.Fatalf("Invalid JSON: %v", err)
+	}
+	if m["user_id"] != "abc-123" {
+		t.Errorf("Expected user_id=abc-123, got: %v", m["user_id"])
+	}
+	if m["section"] != "billing" {
+		t.Errorf("Expected section=billing, got: %v", m["section"])
+	}
+	if _, ok := m["source"]; !ok {
+		t.Error("JSON output should contain 'source' field")
+	}
+	fmt.Println("→ user_id и section в JSON ✓")
+}
+
+// === Тест WithAttrs не теряет source и addCxtAttr ===
+
+func TestHandlerMiddlewareWithAttrsPreservesSource(t *testing.T) {
+	buf := &bytes.Buffer{}
+	handler := slog.Handler(slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	handler = NewHandlerMiddleware(handler, Options{Source: true, AddCxtAttr: []string{"user_id"}})
+
+	// Вызываем WithAttrs — должен сохранить source и addCxtAttr
+	handler2 := handler.WithAttrs([]slog.Attr{slog.String("service", "test")})
+
+	// Кладём source в контекст, т.к. rec.PC=0 при ручном создании Record
+	src := getCallerInfo(2)
+	ctx := context.WithValue(context.Background(), Source, src)
+	ctx = context.WithValue(ctx, "user_id", "42")
+	rec := slog.Record{
+		Time:    time.Now(),
+		Level:   slog.LevelInfo,
+		Message: "withattrs test",
+	}
+
+	if err := handler2.Handle(ctx, rec); err != nil {
+		t.Fatalf("Handle failed: %v", err)
+	}
+
+	output := strings.TrimSpace(buf.String())
+	fmt.Printf("\n=== TestHandlerMiddlewareWithAttrsPreservesSource ===\n%s\n", output)
+
+	var m map[string]any
+	if err := json.Unmarshal([]byte(output), &m); err != nil {
+		t.Fatalf("Invalid JSON: %v", err)
+	}
+	if _, ok := m["source"]; !ok {
+		t.Error("WithAttrs should preserve source tracking")
+	}
+	if m["user_id"] != "42" {
+		t.Errorf("WithAttrs should preserve addCxtAttr, expected user_id=42, got: %v", m["user_id"])
+	}
+	fmt.Println("→ WithAttrs сохраняет source и user_id ✓")
+}
+
+func TestHandlerMiddlewareWithGroupPreservesSource(t *testing.T) {
+	buf := &bytes.Buffer{}
+	handler := slog.Handler(slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	handler = NewHandlerMiddleware(handler, Options{Source: true, AddCxtAttr: []string{"user_id"}})
+
+	handler2 := handler.WithGroup("db")
+
+	// Кладём source в контекст
+	src := getCallerInfo(2)
+	ctx := context.WithValue(context.Background(), Source, src)
+	ctx = context.WithValue(ctx, "user_id", "99")
+	rec := slog.Record{
+		Time:    time.Now(),
+		Level:   slog.LevelError,
+		Message: "withgroup test",
+	}
+
+	if err := handler2.Handle(ctx, rec); err != nil {
+		t.Fatalf("Handle failed: %v", err)
+	}
+
+	output := strings.TrimSpace(buf.String())
+	fmt.Printf("\n=== TestHandlerMiddlewareWithGroupPreservesSource ===\n%s\n", output)
+
+	var m map[string]any
+	if err := json.Unmarshal([]byte(output), &m); err != nil {
+		t.Fatalf("Invalid JSON: %v", err)
+	}
+
+	// source и user_id идут в record.Add до handler.Handle,
+	// а WithGroup("db") оборачивает их → проверяем внутри db.*
+	dbGroup, ok := m["db"].(map[string]any)
+	if !ok {
+		t.Fatal("Expected 'db' group in JSON output")
+	}
+	if _, ok := dbGroup["source"]; !ok {
+		t.Error("WithGroup should preserve source tracking")
+	}
+	if dbGroup["user_id"] != "99" {
+		t.Errorf("WithGroup should preserve addCxtAttr, expected user_id=99, got: %v", dbGroup["user_id"])
+	}
+	fmt.Println("→ WithGroup сохраняет source и user_id ✓")
+}
+
+// === Наглядный тест конкурентного логирования ===
+
+func TestConcurrentLoggingVisual(t *testing.T) {
+	buf := &bytes.Buffer{}
+	handler := NewDevHandler(Options{W: buf, Source: true, AddCxtAttr: []string{"req_id"}})
+	slog.SetDefault(slog.New(handler))
+	resetOnceLog()
+
+	fmt.Println("\n=== TestConcurrentLoggingVisual ===")
+	fmt.Println("3 горутины, каждая логирует 5 раз с разными req_id:")
+
+	var wg sync.WaitGroup
+	for g := 0; g < 3; g++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			ctx := context.WithValue(context.Background(), "req_id", fmt.Sprintf("req-%d", id))
+			for i := 0; i < 5; i++ {
+				InfoContext(ctx, fmt.Sprintf("goroutine %d iteration %d", id, i))
+			}
+		}(g)
+	}
+	wg.Wait()
+
+	output := buf.String()
+	fmt.Printf("%s", output)
+
+	lines := strings.Count(output, "INFO")
+	fmt.Printf("→ Всего записей: %d (ожидается 15: 3 горутины × 5 итераций)\n", lines)
+
+	if lines != 15 {
+		t.Errorf("Expected 15 INFO logs, got %d", lines)
 	}
 }

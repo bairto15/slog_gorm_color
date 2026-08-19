@@ -120,11 +120,11 @@ func (h *HandlerMiddleware) Handle(ctx context.Context, rec slog.Record) error {
 }
 
 func (h *HandlerMiddleware) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &HandlerMiddleware{next: h.next.WithAttrs(attrs)}
+	return &HandlerMiddleware{next: h.next.WithAttrs(attrs), source: h.source, addCxtAttr: h.addCxtAttr}
 }
 
 func (h *HandlerMiddleware) WithGroup(name string) slog.Handler {
-	return &HandlerMiddleware{next: h.next.WithGroup(name)}
+	return &HandlerMiddleware{next: h.next.WithGroup(name), source: h.source, addCxtAttr: h.addCxtAttr}
 }
 
 func InitLogger(opts Options) {
