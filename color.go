@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"path"
-	"path/filepath"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -40,6 +38,7 @@ type Options struct {
 	W             io.Writer
 	Source        bool
 	SlowThreshold time.Duration
+	RootDir       string
 }
 
 type handlerTextColor struct {
@@ -216,10 +215,8 @@ func (h *handlerTextColor) appendLevel(buf *buffer, level slog.Level) {
 }
 
 func (h *handlerTextColor) appendSource(buf *buffer, src *slog.Source) {
-	dir, file := filepath.Split(src.File)
-
 	buf.WriteString(Faint)
-	buf.WriteString(path.Join(filepath.Base(dir), file))
+	buf.WriteString(src.File)
 
 	if src.Line != 0 {
 		buf.WriteByte(':')

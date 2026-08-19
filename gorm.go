@@ -3,8 +3,6 @@ package logger
 import (
 	"context"
 	"log/slog"
-	"path"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -111,8 +109,7 @@ func getGormFuncName() (funcName string, file string, line int) {
 		// Извлекаем имя функции корректно
 		funcName = extractFuncName(frame.Function)
 
-		dir, fileName := filepath.Split(frame.File)
-		file = path.Join(filepath.Base(dir), fileName)
+		file = relativePath(frame.File)
 		line = frame.Line
 
 		return

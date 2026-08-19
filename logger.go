@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -19,6 +18,41 @@ const (
 	Resolver       = "resolver"
 	DBResolverMode = "dbresolver:resolver_mode_key"
 )
+
+var rootDir string
+
+func initRootDir(customDir string) {
+	if customDir != "" {
+		rootDir = customDir
+		return
+	}
+	dir, err := os.Getwd()
+	if err != nil {
+		return
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			rootDir = dir
+			return
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+}
+
+func relativePath(abs string) string {
+	if rootDir == "" {
+		return abs
+	}
+	rel, err := filepath.Rel(rootDir, abs)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return abs
+	}
+	return rel
+}
 
 type HandlerMiddleware struct {
 	source     bool
@@ -52,8 +86,7 @@ func (h *HandlerMiddleware) Handle(ctx context.Context, rec slog.Record) error {
 			fs := runtime.CallersFrames([]uintptr{rec.PC})
 			f, _ := fs.Next()
 			if f.File != "" {
-				dir, file := filepath.Split(f.File)
-				pathFile := path.Join(filepath.Base(dir), file)
+				pathFile := relativePath(f.File)
 
 				src := &slog.Source{
 					Function: getFuncNameSlog(f.Function),
@@ -78,6 +111,7 @@ func (h *HandlerMiddleware) WithGroup(name string) slog.Handler {
 }
 
 func InitLogger(opts Options) {
+	initRootDir(opts.RootDir)
 	opt := &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	}
@@ -95,6 +129,7 @@ func GetLogger() *slog.Logger {
 }
 
 func InitDevLogger(opts Options) {
+	initRootDir(opts.RootDir)
 	handler := NewDevHandler(opts)
 
 	logger := slog.New(handler)
@@ -141,10 +176,9 @@ func getCallerInfo(skip int) slog.Source {
 		return slog.Source{}
 	}
 
-	dir, file := filepath.Split(frame.File)
 	return slog.Source{
 		Function: getFuncNameSlog(frame.Function),
-		File:     path.Join(filepath.Base(dir), file),
+		File:     relativePath(frame.File),
 		Line:     frame.Line,
 	}
 }
