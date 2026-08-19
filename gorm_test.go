@@ -632,6 +632,62 @@ func TestJSONGormFields(t *testing.T) {
 	fmt.Println("→ sql, rows, duration, source в JSON ✓")
 }
 
+func TestJSONGormWithContextAttrs(t *testing.T) {
+	buf := &bytes.Buffer{}
+	opt := &slog.HandlerOptions{Level: slog.LevelDebug}
+	handler := slog.Handler(slog.NewJSONHandler(buf, opt))
+	handler = NewHandlerMiddleware(handler, Options{
+		Source:     true,
+		AddCxtAttr: []string{"user_id", "export_group"},
+	})
+	slog.SetDefault(slog.New(handler))
+
+	gormLog := NewGormLogger(true, nil)
+
+	// Контекст с пользовательскими атрибутами + GORM Trace
+	ctx := context.WithValue(context.Background(), "user_id", "u-42")
+	ctx = context.WithValue(ctx, "export_group", "mw_general_report")
+
+	begin := time.Now().Add(-80 * time.Millisecond)
+	fc := func() (string, int64) {
+		return "SELECT count(*) FROM reports", 1234
+	}
+
+	gormLog.Trace(ctx, begin, fc, nil)
+
+	output := strings.TrimSpace(buf.String())
+	fmt.Printf("\n=== TestJSONGormWithContextAttrs ===\n%s\n", output)
+
+	var m map[string]any
+	if err := json.Unmarshal([]byte(output), &m); err != nil {
+		t.Fatalf("Invalid JSON: %v", err)
+	}
+
+	// Пользовательские контекстные атрибуты
+	if m["user_id"] != "u-42" {
+		t.Errorf("Expected user_id=u-42, got: %v", m["user_id"])
+	}
+	if m["export_group"] != "mw_general_report" {
+		t.Errorf("Expected export_group=mw_general_report, got: %v", m["export_group"])
+	}
+
+	// GORM-поля
+	if m["sql"] != "SELECT count(*) FROM reports" {
+		t.Errorf("Expected sql, got: %v", m["sql"])
+	}
+	if m["rows"] != float64(1234) {
+		t.Errorf("Expected rows=1234, got: %v", m["rows"])
+	}
+	if m["duration"] == nil {
+		t.Error("Expected duration in JSON")
+	}
+	if _, ok := m["source"]; !ok {
+		t.Error("Expected source in JSON")
+	}
+
+	fmt.Println("→ user_id + export_group + sql + rows + duration + source — всё в одном JSON ✓")
+}
+
 // === Тест WithAttrs не теряет source и addCxtAttr ===
 
 func TestHandlerMiddlewareWithAttrsPreservesSource(t *testing.T) {
