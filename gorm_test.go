@@ -619,6 +619,13 @@ func TestJSONGormFields(t *testing.T) {
 	if m["duration"] == nil {
 		t.Error("Expected duration in JSON output")
 	}
+	// Duration должен быть в секундах (float64), не в наносекундах
+	dur, ok := m["duration"].(float64)
+	if !ok {
+		t.Errorf("Expected duration as float64 (seconds), got: %T %v", m["duration"], m["duration"])
+	} else if dur < 0.1 || dur > 0.3 {
+		t.Errorf("Expected duration ~0.15s, got: %v", dur)
+	}
 	if _, ok := m["source"]; !ok {
 		t.Error("Expected source in JSON output")
 	}

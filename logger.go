@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -97,7 +98,11 @@ func (h *HandlerMiddleware) Handle(ctx context.Context, rec slog.Record) error {
 	}
 
 	if c := ctx.Value(Duration); c != nil {
-		rec.Add(Duration, c)
+		if d, ok := c.(time.Duration); ok {
+			rec.Add(Duration, d.Seconds())
+		} else {
+			rec.Add(Duration, c)
+		}
 	}
 
 	if c := ctx.Value(Rows); c != nil {
