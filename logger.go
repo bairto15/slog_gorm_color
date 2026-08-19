@@ -244,6 +244,57 @@ func shouldLog(skip int) bool {
 	return true
 }
 
+// logOnce — общая логика для Once-функций: проверяет дубликат, логирует с корректным source.
+func logOnce(skip int, level slog.Level, msg string, args ...any) {
+	src := getCallerInfo(skip)
+	key := src.File + ":" + strconv.Itoa(src.Line)
+
+	lastLogMu.Lock()
+	if lastLogKey == key {
+		lastLogMu.Unlock()
+		return
+	}
+	lastLogKey = key
+	lastLogMu.Unlock()
+
+	ctx := context.WithValue(context.Background(), Source, src)
+	slog.Log(ctx, level, msg, args...)
+}
+
+func logOnceCtx(skip int, ctx context.Context, level slog.Level, msg string, args ...any) {
+	src := getCallerInfo(skip)
+	key := src.File + ":" + strconv.Itoa(src.Line)
+
+	lastLogMu.Lock()
+	if lastLogKey == key {
+		lastLogMu.Unlock()
+		return
+	}
+	lastLogKey = key
+	lastLogMu.Unlock()
+
+	ctx = context.WithValue(ctx, Source, src)
+	slog.Log(ctx, level, msg, args...)
+}
+
+// Once-версии — пропускают повторные вызовы с одной строки подряд
+
+func InfoOnce(msg string, args ...any) {
+	logOnce(4, slog.LevelInfo, msg, args...)
+}
+
+func DebugOnce(msg string, args ...any) {
+	logOnce(4, slog.LevelDebug, msg, args...)
+}
+
+func WarnOnce(msg string, args ...any) {
+	logOnce(4, slog.LevelWarn, msg, args...)
+}
+
+func ErrorOnce(msg string, args ...any) {
+	logOnce(4, slog.LevelError, msg, args...)
+}
+
 // Context-версии — принимают существующий контекст (с user_id, export_id и т.д.)
 
 func InfoContext(ctx context.Context, msg string, args ...any) {
@@ -273,29 +324,17 @@ func ErrorContext(ctx context.Context, msg string, args ...any) {
 // Context Once-версии — пропускают повторные вызовы с одной строки подряд
 
 func InfoContextOnce(ctx context.Context, msg string, args ...any) {
-	if !shouldLog(4) {
-		return
-	}
-	InfoContext(ctx, msg, args...)
+	logOnceCtx(4, ctx, slog.LevelInfo, msg, args...)
 }
 
 func DebugContextOnce(ctx context.Context, msg string, args ...any) {
-	if !shouldLog(4) {
-		return
-	}
-	DebugContext(ctx, msg, args...)
+	logOnceCtx(4, ctx, slog.LevelDebug, msg, args...)
 }
 
 func WarnContextOnce(ctx context.Context, msg string, args ...any) {
-	if !shouldLog(4) {
-		return
-	}
-	WarnContext(ctx, msg, args...)
+	logOnceCtx(4, ctx, slog.LevelWarn, msg, args...)
 }
 
 func ErrorContextOnce(ctx context.Context, msg string, args ...any) {
-	if !shouldLog(4) {
-		return
-	}
-	ErrorContext(ctx, msg, args...)
+	logOnceCtx(4, ctx, slog.LevelError, msg, args...)
 }

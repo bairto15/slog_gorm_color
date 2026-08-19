@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -328,5 +329,186 @@ func TestLoggerWrapperSource(t *testing.T) {
 
 	if !strings.Contains(output, "gorm_test.go") {
 		t.Errorf("Error source should point to gorm_test.go, got: %s", output)
+	}
+}
+
+// === Тесты для *Once функций ===
+
+func resetOnceLog() {
+	lastLogKey = ""
+}
+
+func TestOnceSameLine(t *testing.T) {
+	buf := &bytes.Buffer{}
+	handler := NewDevHandler(Options{W: buf, Source: true})
+	slog.SetDefault(slog.New(handler))
+	resetOnceLog()
+
+	fmt.Println("\n=== TestOnceSameLine ===")
+	fmt.Println("3 вызова ErrorOnce с одной строки:")
+
+	for i := 0; i < 3; i++ {
+		ErrorOnce("same line error", "i", i) // все 3 вызова с одной строки
+	}
+
+	output := buf.String()
+	fmt.Printf("%s", output)
+
+	lines := strings.Count(output, "ERROR")
+	if lines != 1 {
+		t.Errorf("Expected exactly 1 ERROR log, got %d", lines)
+	}
+	fmt.Println("→ Выведена только 1 запись из 3 ✓")
+}
+
+func TestOnceDifferentLines(t *testing.T) {
+	buf := &bytes.Buffer{}
+	handler := NewDevHandler(Options{W: buf, Source: true})
+	slog.SetDefault(slog.New(handler))
+	resetOnceLog()
+
+	fmt.Println("\n=== TestOnceDifferentLines ===")
+	fmt.Println("3 вызова с разных строк:")
+
+	WarnOnce("first warning")
+	WarnOnce("second warning")
+	WarnOnce("third warning")
+
+	output := buf.String()
+	fmt.Printf("%s", output)
+
+	lines := strings.Count(output, "WARN")
+	if lines != 3 {
+		t.Errorf("Expected 3 WARN logs, got %d", lines)
+	}
+	fmt.Println("→ Все 3 записи выведены ✓")
+}
+
+// helperA и helperB — вспомогательные функции для тестирования чередования.
+// Каждая вызывает *Once из фиксированной строки, чтобы дедупликация работала.
+func helperA() { InfoOnce("from A") }
+func helperB() { InfoOnce("from B") }
+
+func TestOnceInterleaved(t *testing.T) {
+	buf := &bytes.Buffer{}
+	handler := NewDevHandler(Options{W: buf, Source: true})
+	slog.SetDefault(slog.New(handler))
+	resetOnceLog()
+
+	fmt.Println("\n=== TestOnceInterleaved ===")
+	fmt.Println("Чередование: A, A, B, A:")
+
+	helperA() // A — выводит
+	helperA() // A — пропуск (та же строка)
+	helperB() // B — выводит (другая строка)
+	helperA() // A — выводит (после B снова уникальна)
+
+	output := buf.String()
+	fmt.Printf("%s", output)
+
+	lines := strings.Count(output, "INFO")
+	if lines != 3 {
+		t.Errorf("Expected 3 INFO logs, got %d", lines)
+	}
+	fmt.Println("→ 3 записи: A, B, A ✓")
+}
+
+func callErrorCtxOnce(ctx context.Context, msg string) {
+	ErrorContextOnce(ctx, msg, "key", "val")
+}
+
+func TestOnceContext(t *testing.T) {
+	buf := &bytes.Buffer{}
+	handler := NewDevHandler(Options{W: buf, Source: true, AddCxtAttr: []string{"user_id"}})
+	slog.SetDefault(slog.New(handler))
+	resetOnceLog()
+
+	ctx := context.WithValue(context.Background(), "user_id", "123")
+
+	fmt.Println("\n=== TestOnceContext ===")
+	fmt.Println("ContextOnce с контекстом user_id:")
+
+	callErrorCtxOnce(ctx, "ctx error 1") // выводит
+	callErrorCtxOnce(ctx, "ctx error 2") // пропуск
+	callErrorCtxOnce(ctx, "ctx error 3") // пропуск
+
+	output := buf.String()
+	fmt.Printf("%s", output)
+
+	lines := strings.Count(output, "ERROR")
+	if lines != 1 {
+		t.Errorf("Expected 1 ERROR log, got %d", lines)
+	}
+	if !strings.Contains(output, "user_id") || !strings.Contains(output, "123") {
+		t.Error("Expected output to contain user_id and 123")
+	}
+	fmt.Println("→ 1 запись с контекстом ✓")
+}
+
+func TestOnceConcurrent(t *testing.T) {
+	buf := &bytes.Buffer{}
+	handler := NewDevHandler(Options{W: buf, Source: true})
+	slog.SetDefault(slog.New(handler))
+	resetOnceLog()
+
+	fmt.Println("\n=== TestOnceConcurrent ===")
+	fmt.Println("10 горутин, каждая пишет ErrorOnce 100 раз:")
+
+	var wg sync.WaitGroup
+	for g := 0; g < 10; g++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for i := 0; i < 100; i++ {
+				ErrorOnce("concurrent error", "goroutine", id, "i", i)
+			}
+		}(g)
+	}
+	wg.Wait()
+
+	output := buf.String()
+	fmt.Printf("%s", output)
+
+	lines := strings.Count(output, "ERROR")
+	fmt.Printf("→ Всего записей: %d (из 1000 возможных)\n", lines)
+
+	if lines == 0 {
+		t.Error("Expected at least 1 log")
+	}
+	if lines > 10 {
+		t.Errorf("Expected at most 10 logs (one per goroutine), got %d", lines)
+	}
+}
+
+func TestOnceContextConcurrent(t *testing.T) {
+	buf := &bytes.Buffer{}
+	handler := NewDevHandler(Options{W: buf, Source: true})
+	slog.SetDefault(slog.New(handler))
+	resetOnceLog()
+
+	fmt.Println("\n=== TestOnceContextConcurrent ===")
+	fmt.Println("5 горутин с разными контекстами:")
+
+	var wg sync.WaitGroup
+	for g := 0; g < 5; g++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			ctx := context.WithValue(context.Background(), "req_id", fmt.Sprintf("req-%d", id))
+			for i := 0; i < 50; i++ {
+				WarnContextOnce(ctx, "concurrent warn", "goroutine", id)
+			}
+		}(g)
+	}
+	wg.Wait()
+
+	output := buf.String()
+	fmt.Printf("%s", output)
+
+	lines := strings.Count(output, "WARN")
+	fmt.Printf("→ Всего записей: %d\n", lines)
+
+	if lines == 0 {
+		t.Error("Expected at least 1 log")
 	}
 }
